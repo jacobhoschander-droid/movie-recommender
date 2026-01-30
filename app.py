@@ -46,7 +46,7 @@ def get_matches(q: str) -> pd.DataFrame:
     return movies[movies["title"].str.contains(q, case=False, na=False)]
 
 
-def recommend_from_index(seed_idx: int, k: int, year_window: int, min_ratings: int, sort_by: str):
+def recommend_from_index(seed_idx: int, k: int, year_window: int, sort_by: str):
     chosen_title = movies.loc[seed_idx, "title"]
     chosen_year = movies.loc[seed_idx, "year"]
 
@@ -76,12 +76,6 @@ def recommend_from_index(seed_idx: int, k: int, year_window: int, min_ratings: i
     # Attach similarity
     candidates["similarity"] = candidates.index.map(sim_lookup).fillna(0)
 
-    # Popularity filter
-    if min_ratings > 0:
-        pop_filtered = candidates[candidates["rating_count"] >= min_ratings]
-        if len(pop_filtered) >= k:
-            candidates = pop_filtered
-
     # Normalize popularity inside candidate set
     max_count = candidates["rating_count"].max() if len(candidates) else 0
     candidates["popularity"] = 0 if max_count == 0 else (candidates["rating_count"] / max_count)
@@ -109,7 +103,7 @@ def recommend_from_index(seed_idx: int, k: int, year_window: int, min_ratings: i
 
 # ---------- Controls (on page, no sidebar) ----------
 st.subheader("Controls")
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3 = st.columns(3)
 
 with c1:
     query = st.text_input(
@@ -122,9 +116,6 @@ with c2:
 
 with c3:
     k = st.slider("Recommendations", 5, 25, 10, 1)
-
-with c4:
-    min_ratings = st.slider("Min ratings", 0, 200, 25, 5)
 
 sort_by = st.selectbox(
     "Sort results by",
@@ -165,7 +156,6 @@ with right:
             seed_idx=seed_idx,
             k=k,
             year_window=year_window,
-            min_ratings=min_ratings,
             sort_by=sort_by
         )
 
