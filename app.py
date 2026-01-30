@@ -41,8 +41,10 @@ def load_data():
 
 movies, X, nn = load_data()
 
+
 def get_matches(q: str) -> pd.DataFrame:
     return movies[movies["title"].str.contains(q, case=False, na=False)]
+
 
 def recommend_from_index(seed_idx: int, k: int, year_window: int, min_ratings: int, sort_by: str):
     chosen_title = movies.loc[seed_idx, "title"]
@@ -63,27 +65,22 @@ def recommend_from_index(seed_idx: int, k: int, year_window: int, min_ratings: i
 
     # Filter by year window (if we have year)
     if pd.notna(chosen_year) and year_window > 0:
-        candidates = candidates[
+        year_filtered = candidates[
             (candidates["year"].notna()) &
             (candidates["year"] >= chosen_year - year_window) &
             (candidates["year"] <= chosen_year + year_window)
         ]
+        if len(year_filtered) >= k:
+            candidates = year_filtered
 
-    # If year filter removes too many, fall back
-    if len(candidates) < k:
-        candidates = movies.loc[rec_indices].copy()
-
-    # Attach similarity (after filtering)
+    # Attach similarity
     candidates["similarity"] = candidates.index.map(sim_lookup).fillna(0)
 
     # Popularity filter
     if min_ratings > 0:
-        candidates = candidates[candidates["rating_count"] >= min_ratings]
-
-    # If that removes too many, loosen it automatically
-    if len(candidates) < k:
-        candidates = movies.loc[rec_indices].copy()
-        candidates["similarity"] = candidates.index.map(sim_lookup).fillna(0)
+        pop_filtered = candidates[candidates["rating_count"] >= min_ratings]
+        if len(pop_filtered) >= k:
+            candidates = pop_filtered
 
     # Normalize popularity inside candidate set
     max_count = candidates["rating_count"].max() if len(candidates) else 0
@@ -110,33 +107,30 @@ def recommend_from_index(seed_idx: int, k: int, year_window: int, min_ratings: i
     return chosen_title, recs
 
 
-# ---------- Sidebar ----------
-st.sidebar.header("Controls")
+# ---------- Controls (on page, no sidebar) ----------
+st.subheader("Controls")
+c1, c2, c3, c4 = st.columns(4)
 
-browse_all = st.sidebar.checkbox("Browse all titles (no search needed)", value=False)
-
-if browse_all:
-    query = ""
-else:
-    query = st.sidebar.text_input(
+with c1:
+    query = st.text_input(
         "Search any movie title",
         placeholder="Type anything: Inception, Interstellar, Godfather, Spider-Man...",
     )
 
-year_window = st.sidebar.slider("Year window (± years)", 0, 20, 5, 1)
-k = st.sidebar.slider("Number of recommendations", 5, 25, 10, 1)
+with c2:
+    year_window = st.slider("Year window (± years)", 0, 20, 5, 1)
 
-min_ratings = st.sidebar.slider("Minimum ratings (N)", 0, 200, 25, 5)
+with c3:
+    k = st.slider("Recommendations", 5, 25, 10, 1)
 
-sort_by = st.sidebar.selectbox(
+with c4:
+    min_ratings = st.slider("Min ratings", 0, 200, 25, 5)
+
+sort_by = st.selectbox(
     "Sort results by",
     ["score (recommended)", "avg_rating", "rating_count", "year"],
     index=0
 )
-
-st.sidebar.markdown("---")
-st.sidebar.caption("Tip: If search returns many matches, use the dropdown search to narrow fast.")
-
 
 # ---------- Layout ----------
 left, right = st.columns([1, 2], gap="large")
@@ -144,25 +138,22 @@ left, right = st.columns([1, 2], gap="large")
 with left:
     st.subheader("1) Choose a movie")
 
-    if browse_all:
-        st.caption(f"Browsing all MovieLens titles ({len(movies):,} movies).")
-        chosen = st.selectbox("Select a title (type to search)", movies["title"].sort_values().tolist())
-    else:
-        if not query.strip():
-            st.info("Type a movie title in the sidebar search, or enable **Browse all titles**.")
-            st.stop()
-
+    # If query is empty, allow browsing full list
+    if query.strip():
         matches = get_matches(query.strip())
         st.caption(f"Found {len(matches):,} matches in MovieLens.")
-
         if matches.empty:
-            st.warning("No matches found in this dataset. Try a different spelling/title.")
+            st.warning("No matches found in this dataset.")
             st.stop()
+        options = matches.head(50)["title"].tolist()
+    else:
+        st.caption(f"Browse all titles ({len(movies):,} movies). Tip: type in the box above to filter.")
+        options = movies["title"].sort_values().tolist()
 
-        chosen = st.selectbox("Select the exact title", matches.head(50)["title"].tolist())
-
+    chosen = st.selectbox("Select a movie", options)
     seed_idx = movies.index[movies["title"] == chosen][0]
-    go = st.button("Recommend 🎯", use_container_width=True)
+
+    go = st.button("Recommend 🎯", width="stretch")
 
 with right:
     st.subheader("2) Recommendations")
@@ -199,9 +190,9 @@ with right:
                     "score": "{:.3f}",
                 }
             ),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
 st.markdown("---")
-st.caption("Built by Jakie")
+st.caption("Built by Jakie * Written by Chat")
