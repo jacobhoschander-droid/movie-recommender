@@ -5,7 +5,7 @@ from recommender import (
     load_movies,
     load_ratings,
     build_rating_stats,
-    build_similarity_matrix,
+    build_recommender,
 )
 
 # ---------- Page ----------
@@ -36,10 +36,10 @@ def load_data():
     movies = load_movies()
     ratings = load_ratings()
     movies = build_rating_stats(movies, ratings)
-    sim = build_similarity_matrix(movies)
-    return movies, sim
+    X, nn = build_recommender(movies)
+    return movies, X, nn
 
-movies, sim = load_data()
+movies, X, nn = load_data()
 
 def get_matches(q: str) -> pd.DataFrame:
     return movies[movies["title"].str.contains(q, case=False, na=False)]
@@ -48,15 +48,18 @@ def recommend_from_index(seed_idx: int, k: int, year_window: int, min_ratings: i
     chosen_title = movies.loc[seed_idx, "title"]
     chosen_year = movies.loc[seed_idx, "year"]
 
-    scores = list(enumerate(sim[seed_idx]))
-    scores = sorted(scores, key=lambda x: x[1], reverse=True)
-
     POOL_SIZE = 400
-    top_pool = scores[1 : POOL_SIZE + 1]
-    sim_lookup = {i: s for i, s in top_pool}
 
-    rec_indices = [i for i, _ in top_pool]
-    candidates = movies.loc[rec_indices].copy()
+    distances, indices = nn.kneighbors(X[seed_idx], n_neighbors=POOL_SIZE + 1)
+    distances = distances.flatten()
+    indices = indices.flatten()
+
+    # Skip the first one (it's the movie itself)
+    candidate_indices = indices[1:]
+    candidate_sims = 1 - distances[1:]  # cosine similarity = 1 - cosine distance
+
+    sim_lookup = {int(i): float(s) for i, s in zip(candidate_indices, candidate_sims)}
+    candidates = movies.loc[candidate_indices].copy()
 
     # Filter by year window (if we have year)
     if pd.notna(chosen_year) and year_window > 0:

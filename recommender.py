@@ -57,14 +57,20 @@ def build_rating_stats(movies: pd.DataFrame, ratings: pd.DataFrame):
 
     return movies
 
-def build_similarity_matrix(movies: pd.DataFrame):
-    movies = movies.copy()
-    movies["genres_text"] = movies["genres"].str.replace("|", " ", regex=False)
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.neighbors import NearestNeighbors
 
-    vectorizer = CountVectorizer()
-    genre_matrix = vectorizer.fit_transform(movies["genres_text"])
+def build_recommender(movies: pd.DataFrame):
+    # Turn "Action|Crime|Drama" into "Action Crime Drama"
+    corpus = movies["genres"].fillna("").str.replace("|", " ", regex=False)
 
-    return cosine_similarity(genre_matrix)
+    vectorizer = TfidfVectorizer()
+    X = vectorizer.fit_transform(corpus)  # sparse matrix (memory efficient)
+
+    nn = NearestNeighbors(metric="cosine", algorithm="brute")
+    nn.fit(X)
+
+    return X, nn
 
 
 def recommend(query: str, movies: pd.DataFrame, sim_matrix, k=10):
